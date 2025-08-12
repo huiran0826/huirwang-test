@@ -2,7 +2,8 @@
 
 # ---- Configurable Variables ----
 KEY_FILE="key.pem"  # Path to your SSH key
-PUBLIC_IP="18.189.171.26"      # Replace with the actual public IP
+PUBLIC_IP="3.149.25.230"
+PRIVATE_IP_INT_SVC="10.0.0.91"
 USER="core"
 REMOTE_PATH="/var/home/core"
 LOCAL_KUBECONFIG_PATH="/tmp/kubeconfig"
@@ -161,7 +162,7 @@ FRR_SCRIPT
 
 # ---- Step 1: SCP kubeconfig and script ----
 echo "Copying kubeconfig and script to remote host..."
-scp -i "$KEY_FILE" -o StrictHostKeyChecking=no kubeconfig "$SCRIPT_NAME" "$USER@$PUBLIC_IP:$REMOTE_PATH"
+scp -i "$KEY_FILE" -o StrictHostKeyChecking=no $LOCAL_KUBECONFIG_PATH "$SCRIPT_NAME" "$USER@$PUBLIC_IP:$REMOTE_PATH"
 
 # ---- Step 2: Set KUBECONFIG and run the script remotely ----
 echo "Running script on remote host..."
