@@ -1,7 +1,7 @@
 export NODE_IP_NAME="ip-10-0-48-110.us-east-2.compute.internal"
 export REGION="us-east-2" 
 export TARGET_INSTANCE_NAME="bgp-0813-int-svc"
-KEY_FILE="/Users/huirwang/.ssh/openshift-qe.pem"  # Path to your SSH key
+KEY_FILE="key.pem"  # Path to your SSH key
 USER="core"
 REMOTE_PATH="/var/home/core"
 LOCAL_KUBECONFIG_PATH="/tmp/kubeconfig"
