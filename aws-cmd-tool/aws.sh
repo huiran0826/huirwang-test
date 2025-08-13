@@ -298,8 +298,8 @@ ssh -i "$KEY_FILE" -o StrictHostKeyChecking=no "$USER@$PUBLIC_IP_INT_SVC" << EOF
   sudo "$REMOTE_PATH/$SCRIPT_NAME"
 EOF
 
-# wait ovn pods rollout
-sleep 120
+# wait ovn pods rollout and configuraiton taking effect
+sleep 300
 
 # 
 oc apply -f - <<EOF
