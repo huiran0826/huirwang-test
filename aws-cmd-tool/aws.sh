@@ -1,13 +1,15 @@
-export NODE_IP_NAME="ip-10-0-48-110.us-east-2.compute.internal"
-export REGION="us-east-2" 
-export TARGET_INSTANCE_NAME="bgp-0813-int-svc"
-KEY_FILE="key.pem"  # Path to your SSH key
+KEY_FILE="~/.ssh/openshift-qe.pem"
 USER="core"
 REMOTE_PATH="/var/home/core"
 LOCAL_KUBECONFIG_PATH="/tmp/kubeconfig"
 KUBECONFIG_REMOTE="$REMOTE_PATH/kubeconfig"
 SCRIPT_NAME="generate_external_frr.sh" 
+#PRIVATE_IP_SEC_NIC="10.0.48.100"
+REGION="us-east-2" 
+NODE_IP_NAME=$(oc get nodes | awk 'NR==2 {print $1}')
+TARGET_INSTANCE_NAME="$(oc get route console -n openshift-console -o=jsonpath={.spec.host} | awk -F'.' '{print $3}')-int-svc"
 
+export KUBECONFIG=$LOCAL_KUBECONFIG_PATH
 # Get instance ID
 NODE_INSTANCE_ID=$(aws ec2 describe-instances --region $REGION \
   --filters "Name=private-dns-name,Values=$NODE_IP_NAME" \
@@ -44,6 +46,13 @@ ENI_ID=$(aws ec2 create-network-interface \
   --output text)
 
 echo "ENI ID: $ENI_ID"
+
+PRIVATE_IP_SEC_NIC=$(aws ec2 describe-network-interfaces \
+  --region "$REGION" \
+  --network-interface-ids "$ENI_ID" \
+  --query "NetworkInterfaces[0].PrivateIpAddress" \
+  --output text)
+echo "PRIVATE_IP_SEC_NIC: $PRIVATE_IP_SEC_NIC"
 
 echo "🔗 Step 3: Attach ENI to instance: $TARGET_INSTANCE_NAME"
 TARGET_INSTANCE_ID=$(aws ec2 describe-instances --region $REGION \
@@ -106,6 +115,11 @@ for sg in $SG_IDS; do
   aws ec2 authorize-security-group-ingress --region $REGION \
     --group-id "$sg" \
     --protocol tcp --port 179 --cidr 0.0.0.0/0 || echo " TCP 179 rule may already exist"
+
+  echo " Adding TCP 8000 rule to $sg"
+  aws ec2 authorize-security-group-ingress --region $REGION \
+   --group-id "$sg" \
+   --protocol tcp --port 8000 --cidr 0.0.0.0/0 || echo " TCP 8000 rule may already exist"
 done
 
 ecgho "Security Group IDs: $$SECURITY_GROUP_ID"
@@ -116,6 +130,10 @@ aws ec2 authorize-security-group-ingress --region $REGION \
  aws ec2 authorize-security-group-ingress --region $REGION \
     --group-id "$SECURITY_GROUP_ID" \
     --protocol tcp --port 179 --cidr 0.0.0.0/0 || echo " TCP 179 rule may already exist"
+
+ aws ec2 authorize-security-group-ingress --region $REGION \
+    --group-id "$SECURITY_GROUP_ID" \
+    --protocol tcp --port 8000 --cidr 0.0.0.0/0 || echo " TCP 8000 rule may already exist"
 
 
 # Get public IP and private IP of the int-svc instance
@@ -172,7 +190,7 @@ EOF
     echo "" >> "$OUTPUT_FILE"
 
     echo " address-family ipv4 unicast" >> "$OUTPUT_FILE"
-    echo "  network 172.20.100.0/24" >> "$OUTPUT_FILE"
+    echo "  network 172.20.0.0/24" >> "$OUTPUT_FILE"
     for ip in "${ipv4_list[@]}"; do
         echo "  neighbor $ip activate" >> "$OUTPUT_FILE"
         echo "  neighbor $ip next-hop-self" >> "$OUTPUT_FILE"
@@ -272,7 +290,8 @@ EOF
 
   
   export KUBECONFIG=/var/home/core/kubeconfig
-  ip addr add 172.20.100.1/24 dev eth1
+  ip addr add 172.20.0.100/24 dev eth1
+  sudo netstat -ntlp | grep 8000 || sudo podman run --name http-echo -d -p 8000:8080 quay.io/openshifttest/hello-sdn@sha256:2af5b5ec480f05fda7e9b278023ba04724a3dd53a296afcd8c13f220dec52197
   oc patch Network.operator.openshift.io cluster --type=merge -p='{"spec":{"additionalRoutingCapabilities": {"providers": ["FRR"]}, "defaultNetwork":{"ovnKubernetesConfig":{"routeAdvertisements":"Enabled"}}}}'
   NODES=$(kubectl get nodes -o jsonpath={.items[*].status.addresses[?\(@.type==\"InternalIP\"\)].address})
   echo $NODES
@@ -313,7 +332,7 @@ spec:
     routers:
     - asn: 64512
       neighbors:
-      - address: ${PRIVATE_IP_INT_SVC}
+      - address: $PRIVATE_IP_SEC_NIC 
         disableMP: true
         asn: 64512
         toReceive:
